@@ -62,7 +62,6 @@ const partToPoints = {
 };
 
 const getPoints = (model) => [].concat(...model.map((part) => partToPoints[part.type](part)));
-const points = getPoints(pathModel);
 
 const getLines = (model) => {
     let lastPoint = null;
@@ -91,8 +90,6 @@ const getLines = (model) => {
     }
     return lines;
 };
-
-const lines = getLines(pathModel);
 
 const conversions = {
     [MOVE_TO]: (part) => `M${part.point.join(',')}`,
@@ -154,7 +151,13 @@ const createLine = (line) => {
 };
 
 const updatePath = (elem, model) => {
-
+    const d = dString(model);
+    setAttributes(elem, {
+        'd': d,
+        'stroke': 'blue',
+        'stroke-width': '5',
+        'fill': 'none',
+    });
 };
 
 
@@ -168,22 +171,70 @@ svg.setAttribute('width', `${width}`);
 svg.setAttribute('height', `${height}`);
 svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
-// TODO: create separate groups, one for each layer
-const g = document.createElementNS(ns, 'g');
+const drawingLayer = document.createElementNS(ns, 'g');
+const overlayLayer = document.createElementNS(ns, 'g');
 
-g.setAttribute('transform', `translate(0,${height}) scale(1,-1)`);
+// TODO: describe the translate and scale as a single matrix operation
+drawingLayer.setAttribute('transform', `translate(0,${height}) scale(1,-1)`);
+overlayLayer.setAttribute('transform', `translate(0,${height}) scale(1,-1)`);
 
 const pathElem = createPath(pathModel);
+drawingLayer.appendChild(pathElem);
 
-g.appendChild(pathElem);
-svg.appendChild(g);
+getLines(pathModel).forEach((line) => overlayLayer.appendChild(createLine(line)));
+getPoints(pathModel).forEach((point) => overlayLayer.appendChild(createCircle(point)));
 
 
-lines.map((line) => g.appendChild(createLine(line)));
-
-const handles = points.map((point) => createCircle(point));
-handles.forEach((handle) => g.appendChild(handle));
-
-console.log(lines);
+svg.appendChild(drawingLayer);
+svg.appendChild(overlayLayer);
 
 document.body.appendChild(svg);
+
+const bounds = svg.getBoundingClientRect();
+const offset = [bounds.left, bounds.top];
+
+// TODO: reuse the matrix operation to transform event locations
+const eventToPoint = (e) => [e.pageX - offset[0], bounds.height - (e.pageY - offset[1])];
+
+const downs = Kefir.fromEvents(document, 'mousedown', eventToPoint);
+const moves = Kefir.fromEvents(document, 'mousemove', eventToPoint);
+const ups = Kefir.fromEvents(document, 'mouseup', eventToPoint);
+
+const drags = downs.flatMap(() => moves.takeUntilBy(ups));
+
+const length = (p) => Math.sqrt(Math.pow(p[0], 2) + Math.pow(p[1], 2));
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+const distance = (a, b) => length(sub(a, b));
+
+const empty = (elem) => {
+    while (elem.firstChild) {
+        elem.removeChild(elem.firstChild);
+    }
+};
+
+drags.onValue((value) => {
+    if (selection !== -1) {
+        const part = pathModel[selection];
+        part.point = value;
+        updatePath(pathElem, pathModel);
+        empty(overlayLayer);
+
+        getLines(pathModel).forEach((line) => overlayLayer.appendChild(createLine(line)));
+        getPoints(pathModel).forEach((point) => overlayLayer.appendChild(createCircle(point)));
+    }
+});
+
+let selection = -1;
+
+downs.onValue((mouse) => {
+    // TODO: return an object with the index and the property name of the point
+    // being hit by the mouse
+    selection = pathModel.findIndex((part) => {
+        return distance(mouse, part.point) < 5;
+    });
+});
+
+ups.onValue((mouse) => selection = -1);
+
+document.body.style.background = 'gray';
+svg.style.background = 'white';
