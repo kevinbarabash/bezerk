@@ -18,31 +18,37 @@ const scene = {
 };
 
 // TODO: make this an object with parts being a prop, etc.
-const pathModel = [
-    {
-        type: MOVE_TO,
-        point: [100, 100],
-    },
-    {
-        type: LINE_TO,
-        point: [200, 100],
-    },
-    {
-        type: LINE_TO,
-        point: [200, 200],
-    },
-    {
-        type: QUAD_CURVE_TO,
-        cp: [200, 300],
-        point: [300, 300],
-    },
-    {
-        type: CUBIC_CURVE_TO,
-        cp1: [400, 300],
-        cp2: [300, 400],
-        point: [400, 400],
-    },
-];
+const model = {
+    type: 'PATH',
+    data: [
+        {
+            type: MOVE_TO,
+            point: [100, 100],
+        },
+        {
+            type: LINE_TO,
+            point: [200, 100],
+        },
+        {
+            type: CUBIC_CURVE_TO,
+            point: [200, 200],
+            cp1: [200, 100],
+            cp2: [100, 200],
+        },
+        {
+            type: CUBIC_CURVE_TO,
+            cp1: [300, 200],
+            cp2: [200, 300],
+            point: [300, 300],
+        },
+        {
+            type: CUBIC_CURVE_TO,
+            cp1: [400, 300],
+            cp2: [300, 400],
+            point: [400, 400],
+        },
+    ],
+};
 
 // SVG utils
 
@@ -178,11 +184,11 @@ const overlayLayer = document.createElementNS(ns, 'g');
 drawingLayer.setAttribute('transform', `translate(0,${height}) scale(1,-1)`);
 overlayLayer.setAttribute('transform', `translate(0,${height}) scale(1,-1)`);
 
-const pathElem = createPath(pathModel);
+const pathElem = createPath(model.data);
 drawingLayer.appendChild(pathElem);
 
-getLines(pathModel).forEach((line) => overlayLayer.appendChild(createLine(line)));
-getPoints(pathModel).forEach((point) => overlayLayer.appendChild(createCircle(point)));
+getLines(model.data).forEach((line) => overlayLayer.appendChild(createLine(line)));
+getPoints(model.data).forEach((point) => overlayLayer.appendChild(createCircle(point)));
 
 
 svg.appendChild(drawingLayer);
@@ -214,13 +220,13 @@ const empty = (elem) => {
 
 drags.onValue((value) => {
     if (selection !== -1) {
-        const part = pathModel[selection];
+        const part = model.data[selection];
         part.point = value;
-        updatePath(pathElem, pathModel);
+        updatePath(pathElem, model.data);
         empty(overlayLayer);
 
-        getLines(pathModel).forEach((line) => overlayLayer.appendChild(createLine(line)));
-        getPoints(pathModel).forEach((point) => overlayLayer.appendChild(createCircle(point)));
+        getLines(model.data).forEach((line) => overlayLayer.appendChild(createLine(line)));
+        getPoints(model.data).forEach((point) => overlayLayer.appendChild(createCircle(point)));
     }
 });
 
@@ -229,8 +235,8 @@ let selection = -1;
 downs.onValue((mouse) => {
     // TODO: return an object with the index and the property name of the point
     // being hit by the mouse
-    selection = pathModel.findIndex((part) => {
-        return distance(mouse, part.point) < 5;
+    selection = model.data.findIndex((part) => {
+        return distance(mouse, part.point) < 10;
     });
 });
 
