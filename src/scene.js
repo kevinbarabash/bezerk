@@ -1,12 +1,6 @@
-const MOVE_TO = Symbol();
-const LINE_TO = Symbol();
-const QUAD_CURVE_TO = Symbol();
-const CUBIC_CURVE_TO = Symbol();
-
 // types of objects:
 // - paths
 // - groups
-
 
 const identity = [1, 0, 0, 1, 0, 0];
 
@@ -17,35 +11,33 @@ const scene = {
     transform: identity,
 };
 
-// TODO: make this an object with parts being a prop, etc.
 const model = {
-    type: 'PATH',
+    type: 'PATH',   // use enums?
     data: [
         {
-            type: MOVE_TO,
             point: [100, 100],
+            control1: null,
+            control2: null,
         },
         {
-            type: LINE_TO,
             point: [200, 100],
+            control1: null,
+            control2: null,
         },
         {
-            type: CUBIC_CURVE_TO,
             point: [200, 200],
-            cp1: [200, 100],
-            cp2: [100, 200],
+            control1: [100, 200],
+            control2: [300, 200],
         },
         {
-            type: CUBIC_CURVE_TO,
-            cp1: [300, 200],
-            cp2: [200, 300],
             point: [300, 300],
+            control1: [200, 300],
+            control2: [400, 300],
         },
         {
-            type: CUBIC_CURVE_TO,
-            cp1: [400, 300],
-            cp2: [300, 400],
             point: [400, 400],
+            control1: [300, 400],
+            control2: [300, 400],
         },
     ],
 };
@@ -60,48 +52,31 @@ const flatten = (array) => array.reduce(
 const sum = (array) => array.reduce((result, item) => result + item, 0);
 const average = (array) => sum(array) / array.length;
 
-const partToPoints = {
-    [MOVE_TO]: (part) => [part.point],
-    [LINE_TO]: (part) => [part.point],
-    [QUAD_CURVE_TO]: (part) => [part.cp, part.point],
-    [CUBIC_CURVE_TO]: (part) => [part.cp1, part.cp2, part.point],
+const getPoints = (model) => {
+    const result = [];
+    model.data.forEach((part) => {
+        result.push(part.point);
+        if (part.control1) {
+            result.push(part.control1);
+        }
+        if (part.control2) {
+            result.push(part.control2);
+        }
+    });
+    return result;
 };
 
-const getPoints = (model) => [].concat(...model.map((part) => partToPoints[part.type](part)));
-
 const getLines = (model) => {
-    let lastPoint = null;
     const lines = [];
-    for (const part of model) {
-        switch (part.type) {
-            case MOVE_TO:
-                lastPoint = part.point;
-                break;
-            case LINE_TO:
-                lastPoint = part.point;
-                break;
-            case QUAD_CURVE_TO:
-                lines.push([lastPoint, part.cp]);
-                lines.push([part.cp, part.point]);
-                lastPoint = part.point;
-                break;
-            case CUBIC_CURVE_TO:
-                lines.push([lastPoint, part.cp1]);
-                lines.push([part.cp2, part.point]);
-                lastPoint = part.point;
-                break;
-            default:
-                throw new Error('unsupported path part');
+    for (const part of model.data) {
+        if (part.control1) {
+            lines.push([part.point, part.control1]);
+        }
+        if (part.control2) {
+            lines.push([part.point, part.control2]);
         }
     }
     return lines;
-};
-
-const conversions = {
-    [MOVE_TO]: (part) => `M${part.point.join(',')}`,
-    [LINE_TO]: (part) => `L${part.point.join(',')}`,
-    [QUAD_CURVE_TO]: (part) => `Q${part.cp.join(',')},${part.point.join(',')}`,
-    [CUBIC_CURVE_TO]: (part) => `C${part.cp1.join(',')},${part.cp2.join(',')},${part.point.join(',')}`,
 };
 
 const setAttributes = (elem, attributes) => {
@@ -110,7 +85,28 @@ const setAttributes = (elem, attributes) => {
     }
 };
 
-const dString = (model) => concat(model.map((part) => conversions[part.type](part)));
+const dString = (model) => {
+    let part, prev, result;
+
+    part = model.data[0];
+    result = `M${part.point.join(',')}`;
+    for (let i = 1; i < model.data.length; i++) {
+        prev = part;
+        part = model.data[i];
+
+        if (prev.control2 && part.control1) {
+            result += `C${prev.control2.join(',')},${part.control1.join(',')},${part.point.join(',')}`;
+        } else if (!prev.control2 && part.control1) {
+            result += `C${prev.point.join(',')},${part.control1.join(',')},${part.point.join(',')}`;
+        } else if (!prev.control2 && !part.control1) {
+            result += `L${part.point.join(',')}`;
+        } else {
+            throw new Error('foobar');
+        }
+    }
+
+    return result;
+};
 
 // returns a <path> element
 const createPath = (model) => {
@@ -184,11 +180,11 @@ const overlayLayer = document.createElementNS(ns, 'g');
 drawingLayer.setAttribute('transform', `translate(0,${height}) scale(1,-1)`);
 overlayLayer.setAttribute('transform', `translate(0,${height}) scale(1,-1)`);
 
-const pathElem = createPath(model.data);
+const pathElem = createPath(model);
 drawingLayer.appendChild(pathElem);
 
-getLines(model.data).forEach((line) => overlayLayer.appendChild(createLine(line)));
-getPoints(model.data).forEach((point) => overlayLayer.appendChild(createCircle(point)));
+getLines(model).forEach((line) => overlayLayer.appendChild(createLine(line)));
+getPoints(model).forEach((point) => overlayLayer.appendChild(createCircle(point)));
 
 
 svg.appendChild(drawingLayer);
@@ -218,19 +214,35 @@ const empty = (elem) => {
     }
 };
 
-drags.onValue((value) => {
+drags.onValue((mouse) => {
     if (selection !== -1) {
+        const dx = mouse[0] - lastMouse[0];
+        const dy = mouse[1] - lastMouse[1];
         const part = model.data[selection];
-        part.point = value;
-        updatePath(pathElem, model.data);
+
+        part.point[0] += dx;
+        part.point[1] += dy;
+
+        if (part.control1) {
+            part.control1[0] += dx;
+            part.control1[1] += dy;
+        }
+        if (part.control2) {
+            part.control2[0] += dx;
+            part.control2[1] += dy;
+        }
+
+        updatePath(pathElem, model);
         empty(overlayLayer);
 
-        getLines(model.data).forEach((line) => overlayLayer.appendChild(createLine(line)));
-        getPoints(model.data).forEach((point) => overlayLayer.appendChild(createCircle(point)));
+        getLines(model).forEach((line) => overlayLayer.appendChild(createLine(line)));
+        getPoints(model).forEach((point) => overlayLayer.appendChild(createCircle(point)));
     }
+    lastMouse = mouse;
 });
 
 let selection = -1;
+let lastMouse = null;
 
 downs.onValue((mouse) => {
     // TODO: return an object with the index and the property name of the point
@@ -238,9 +250,13 @@ downs.onValue((mouse) => {
     selection = model.data.findIndex((part) => {
         return distance(mouse, part.point) < 10;
     });
+    lastMouse = mouse;
 });
 
-ups.onValue((mouse) => selection = -1);
+ups.onValue((mouse) => {
+    selection = -1;
+    lastMouse = null;
+});
 
 document.body.style.background = 'gray';
 svg.style.background = 'white';
