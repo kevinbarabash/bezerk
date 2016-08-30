@@ -37,7 +37,7 @@ const model = {
         {
             point: [400, 400],
             control1: [300, 400],
-            control2: [300, 400],
+            control2: null,
         },
     ],
 };
@@ -153,9 +153,8 @@ const createLine = (line) => {
 };
 
 const updatePath = (elem, model) => {
-    const d = dString(model);
     setAttributes(elem, {
-        'd': d,
+        'd': dString(model),
         'stroke': 'blue',
         'stroke-width': '5',
         'fill': 'none',
@@ -215,21 +214,33 @@ const empty = (elem) => {
 };
 
 drags.onValue((mouse) => {
-    if (selection !== -1) {
+    if (selection !== null) {
         const dx = mouse[0] - lastMouse[0];
         const dy = mouse[1] - lastMouse[1];
-        const part = model.data[selection];
+        const part = model.data[selection.index];
 
-        part.point[0] += dx;
-        part.point[1] += dy;
+        if (selection.property === 'point') {
+            part.point[0] += dx;
+            part.point[1] += dy;
 
-        if (part.control1) {
-            part.control1[0] += dx;
-            part.control1[1] += dy;
-        }
-        if (part.control2) {
-            part.control2[0] += dx;
-            part.control2[1] += dy;
+            if (part.control1) {
+                part.control1[0] += dx;
+                part.control1[1] += dy;
+            }
+            if (part.control2) {
+                part.control2[0] += dx;
+                part.control2[1] += dy;
+            }
+        } else if (selection.property === 'control1') {
+            if (part.control1) {
+                part.control1[0] += dx;
+                part.control1[1] += dy;
+            }
+        } else if (selection.property === 'control2') {
+            if (part.control2) {
+                part.control2[0] += dx;
+                part.control2[1] += dy;
+            }
         }
 
         updatePath(pathElem, model);
@@ -241,20 +252,40 @@ drags.onValue((mouse) => {
     lastMouse = mouse;
 });
 
-let selection = -1;
+let selection = null;
 let lastMouse = null;
 
 downs.onValue((mouse) => {
     // TODO: return an object with the index and the property name of the point
     // being hit by the mouse
-    selection = model.data.findIndex((part) => {
-        return distance(mouse, part.point) < 10;
-    });
     lastMouse = mouse;
+
+    for (let i = 0; i < model.data.length; i++) {
+        const part = model.data[i];
+        if (distance(mouse, part.point) < 10) {
+            selection = {
+                index: i,
+                property: 'point',
+            };
+            break;
+        } else if (part.control1 && distance(mouse, part.control1) < 10) {
+            selection = {
+                index: i,
+                property: 'control1',
+            };
+            break;
+        } else if (part.control2 && distance(mouse, part.control2) < 10) {
+            selection = {
+                index: i,
+                property: 'control2',
+            };
+            break;
+        }
+    }
 });
 
 ups.onValue((mouse) => {
-    selection = -1;
+    selection = null;
     lastMouse = null;
 });
 
