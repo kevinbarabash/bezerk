@@ -11,6 +11,7 @@ const scene = {
     transform: identity,
 };
 
+// TODO: only render the control points for the selected vertex
 const model = {
     type: 'PATH',   // use enums?
     data: [
@@ -28,6 +29,7 @@ const model = {
             point: [200, 200],
             control1: [100, 200],
             control2: [300, 200],
+            smooth: true,
         },
         {
             point: [300, 300],
@@ -236,10 +238,22 @@ drags.onValue((mouse) => {
                 part.control1[0] += dx;
                 part.control1[1] += dy;
             }
+            if (part.control2 && part.smooth) {
+                const len = length(sub(part.control2, part.point));
+                const angle = Math.atan2(part.control1[1] - part.point[1], part.control1[0] - part.point[0]) + Math.PI;
+                part.control2[0] = part.point[0] + len * Math.cos(angle);
+                part.control2[1] = part.point[1] + len * Math.sin(angle);
+            }
         } else if (selection.property === 'control2') {
             if (part.control2) {
                 part.control2[0] += dx;
                 part.control2[1] += dy;
+            }
+            if (part.control1 && part.smooth) {
+                const len = length(sub(part.control1, part.point));
+                const angle = Math.atan2(part.control2[1] - part.point[1], part.control2[0] - part.point[0]) + Math.PI;
+                part.control1[0] = part.point[0] + len * Math.cos(angle);
+                part.control1[1] = part.point[1] + len * Math.sin(angle);
             }
         }
 
