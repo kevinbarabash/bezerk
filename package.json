@@ -1,0 +1,22 @@
+{
+  "name": "bezerk",
+  "version": "0.0.1",
+  "description": "Vector graphics editor",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kevinbarabash/bezerk.git"
+  },
+  "author": "Kevin Barabash <kevinb@khanacademy.org>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/kevinbarabash/bezerk/issues"
+  },
+  "homepage": "https://github.com/kevinbarabash/bezerk#readme",
+  "devDependencies": {
+    "webpack": "^1.13.2"
+  }
+}
